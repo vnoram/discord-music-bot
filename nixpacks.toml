@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ["yt-dlp"]
+nixPkgs = ["nodejs_20", "yt-dlp"]
