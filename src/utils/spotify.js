@@ -14,7 +14,6 @@ async function ensureToken() {
   tokenExpiry = Date.now() + data.body.expires_in * 1000;
 }
 
-// Extrae tipo e ID de una URL de Spotify
 function parseSpotifyUrl(url) {
   const match = url.match(/spotify\.com\/(track|playlist|album)\/([A-Za-z0-9]+)/);
   return match ? { type: match[1], id: match[2] } : null;
@@ -43,7 +42,10 @@ async function* getPlaylistTracks(id) {
   const limit = 50;
 
   while (true) {
-    const { body } = await spotifyApi.getPlaylistTracks(id, { offset, limit, fields: 'next,items(track(name,artists,duration_ms,album.images))' });
+    const { body } = await spotifyApi.getPlaylistTracks(id, {
+      offset, limit,
+      fields: 'next,items(track(name,artists,duration_ms,album(images)))',
+    });
     for (const item of body.items) {
       if (item?.track) yield item.track;
     }
@@ -60,7 +62,6 @@ async function getAlbumInfo(id) {
 
 async function* getAlbumTracks(id) {
   await ensureToken();
-  // Get album info first for artist names
   const { body: album } = await spotifyApi.getAlbum(id);
   let offset = 0;
   const limit = 50;
@@ -91,7 +92,7 @@ function trackToSongMeta(track) {
     artist: (track.artists || []).map((a) => a.name).join(', '),
     thumbnail: track.album?.images?.[0]?.url || null,
     durationMs: track.duration_ms,
-    url: null, // will be resolved via YouTube search
+    url: null,
   };
 }
 
@@ -103,4 +104,5 @@ module.exports = {
   getAlbumInfo,
   getAlbumTracks,
   trackToSearchQuery,
-  trackToSongMe
+  trackToSongMeta,
+};
