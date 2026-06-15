@@ -6,8 +6,9 @@ const {
   VoiceConnectionStatus,
   entersState,
   NoSubscriberBehavior,
+  StreamType,
 } = require('@discordjs/voice');
-const play = require('play-dl');
+const { searchYoutube, createAudioStream } = require('./ytdlp');
 
 // Mapa: guildId -> GuildQueue
 const queues = new Map();
@@ -82,12 +83,11 @@ async function connect(queue) {
   return connection;
 }
 
-async function resolveYoutube(song) {
+async function resolveYoutubeUrl(song) {
   if (song.url) return song.url;
   const query = `${song.title} ${song.artist} audio`;
-  const results = await play.search(query, { limit: 1, source: { youtube: 'video' } });
-  if (!results.length) throw new Error(`No se encontró en YouTube: ${song.title}`);
-  return results[0].url;
+  const result = await searchYoutube(query);
+  return result.url;
 }
 
 async function playNext(guildId) {
@@ -98,7 +98,6 @@ async function playNext(guildId) {
     queue.currentSong = null;
     queue.isPlaying = false;
 
-    // Desconectar tras 5 min de silencio
     setTimeout(() => {
       const q = queues.get(guildId);
       if (q && !q.isPlaying && q.songs.length === 0) destroy(guildId);
@@ -111,12 +110,12 @@ async function playNext(guildId) {
   queue.isPlaying = true;
 
   try {
-    const url = await resolveYoutube(song);
+    const url = await resolveYoutubeUrl(song);
     song.url = url;
 
-    const stream = await play.stream(url, { quality: 2 });
-    const resource = createAudioResource(stream.stream, {
-      inputType: stream.type,
+    const stream = createAudioStream(url);
+    const resource = createAudioResource(stream, {
+      inputType: StreamType.Arbitrary,
       inlineVolume: true,
     });
     resource.volume?.setVolume(queue.volume);
@@ -143,7 +142,7 @@ async function playNext(guildId) {
 function skip(guildId) {
   const queue = queues.get(guildId);
   if (!queue) return false;
-  queue.audioPlayer.stop(true); // triggers Idle -> playNext
+  queue.audioPlayer.stop(true);
   return true;
 }
 
@@ -192,15 +191,6 @@ function _formatDuration(ms) {
 }
 
 module.exports = {
-  getQueue,
-  createQueue,
-  connect,
-  playNext,
-  skip,
-  pause,
-  resume,
-  setVolume,
-  clearQueue,
-  destroy,
-  _formatDuration,
+  getQueue, createQueue, connect, playNext,
+  skip, pause, resume, setVolume, clearQueue, destroy, _formatDuration,
 };

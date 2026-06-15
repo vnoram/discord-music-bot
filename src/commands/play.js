@@ -1,7 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const play = require('play-dl');
+const { SlashCommandBuilder } = require('discord.js');
 const player = require('../utils/player');
 const spotify = require('../utils/spotify');
+const ytdlp = require('../utils/ytdlp');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -29,9 +29,7 @@ module.exports = {
       return interaction.editReply('❌ No tengo permisos para conectarme a ese canal de voz.');
     }
 
-    // ── Determinar fuente ────────────────────────────────────────────────────
     let songs = [];
-    let playlistName = null;
 
     try {
       const spInfo = spotify.parseSpotifyUrl(query);
@@ -41,73 +39,38 @@ module.exports = {
         if (spInfo.type === 'track') {
           const meta = await spotify.getTrack(spInfo.id);
           songs = [{ ...meta, url: null }];
-          await interaction.editReply(`🔍 Buscando en YouTube: **${meta.title}** — *${meta.artist}*`);
+          await interaction.editReply(`🎵 **Añadido:** ${meta.title} — *${meta.artist}*`);
 
         } else if (spInfo.type === 'playlist') {
           const info = await spotify.getPlaylistInfo(spInfo.id);
-          playlistName = info.name;
           await interaction.editReply(`⏳ Cargando playlist **${info.name}** (${info.total} canciones)...`);
-          // Cargar en background; las primeras 5 las añadimos ahora
-          songs = await _loadSpotifyTracksPartial(spInfo.id, 'playlist', interaction);
-          return; // _loadSpotifyTracksPartial maneja el resto
+          return _loadSpotifyTracksPartial(spInfo.id, 'playlist', interaction);
 
         } else if (spInfo.type === 'album') {
           const info = await spotify.getAlbumInfo(spInfo.id);
-          playlistName = info.name;
           await interaction.editReply(`⏳ Cargando álbum **${info.name}** (${info.total} canciones)...`);
-          songs = await _loadSpotifyTracksPartial(spInfo.id, 'album', interaction);
-          return;
+          return _loadSpotifyTracksPartial(spInfo.id, 'album', interaction);
         }
 
       } else if (_isYouTubeUrl(query)) {
         // ── YOUTUBE URL ───────────────────────────────────────────────────────
-        const ytType = play.yt_validate(query);
-        if (ytType === 'playlist') {
-          const pl = await play.playlist_info(query, { incomplete: true });
-          const videos = await pl.all_videos();
-          songs = videos.map((v) => ({
-            title: v.title || 'Sin título',
-            artist: v.channel?.name || 'YouTube',
-            url: v.url,
-            durationMs: (v.durationInSec || 0) * 1000,
-            thumbnail: v.thumbnails?.[0]?.url || null,
-          }));
-          await interaction.editReply(`📋 Playlist de YouTube: **${pl.title}** (${songs.length} canciones)`);
-        } else {
-          const info = await play.video_info(query);
-          const v = info.video_details;
-          songs = [{
-            title: v.title || 'Sin título',
-            artist: v.channel?.name || 'YouTube',
-            url: query,
-            durationMs: (v.durationInSec || 0) * 1000,
-            thumbnail: v.thumbnails?.[0]?.url || null,
-          }];
-          await interaction.editReply(`🎵 Añadido: **${songs[0].title}**`);
-        }
+        const info = await ytdlp.getVideoInfo(query);
+        songs = [info];
+        await interaction.editReply(`🎵 **Añadido:** ${info.title} — *${info.artist}*`);
 
       } else {
-        // ── BÚSQUEDA ──────────────────────────────────────────────────────────
-        const results = await play.search(query, { limit: 1, source: { youtube: 'video' } });
-        if (!results.length) return interaction.editReply('❌ No encontré resultados para esa búsqueda.');
-        const v = results[0];
-        songs = [{
-          title: v.title || 'Sin título',
-          artist: v.channel?.name || 'YouTube',
-          url: v.url,
-          durationMs: (v.durationInSec || 0) * 1000,
-          thumbnail: v.thumbnails?.[0]?.url || null,
-        }];
-        await interaction.editReply(`🎵 Añadido: **${songs[0].title}** — *${songs[0].artist}*`);
+        // ── BÚSQUEDA DE TEXTO ─────────────────────────────────────────────────
+        const result = await ytdlp.searchYoutube(query);
+        songs = [result];
+        await interaction.editReply(`🎵 **Añadido:** ${result.title} — *${result.artist}*`);
       }
 
     } catch (err) {
-      console.error('[play] Error cargando canción:', err);
+      console.error('[play] Error:', err);
       return interaction.editReply(`❌ Error al cargar la música: ${err.message}`);
     }
 
     if (!songs.length) return interaction.editReply('❌ No se pudieron cargar canciones.');
-
     await _enqueueAndPlay(interaction, voiceChannel, songs);
   },
 };
@@ -123,7 +86,6 @@ async function _loadSpotifyTracksPartial(id, type, interaction) {
   const firstBatch = [];
   let count = 0;
 
-  // Recoger primeras 5 canciones para empezar a reproducir rápido
   for await (const track of generator) {
     firstBatch.push(spotify.trackToSongMeta(track));
     count++;
@@ -132,15 +94,11 @@ async function _loadSpotifyTracksPartial(id, type, interaction) {
 
   if (!firstBatch.length) {
     await interaction.editReply('❌ No se encontraron canciones en esa playlist/álbum.');
-    return [];
+    return;
   }
 
   await _enqueueAndPlay(interaction, voiceChannel, firstBatch);
-
-  // Continuar cargando el resto en background
   _loadRemainingTracks(id, type, generator, interaction).catch(console.error);
-
-  return [];
 }
 
 async function _loadRemainingTracks(id, type, generator, interaction) {
@@ -156,7 +114,7 @@ async function _loadRemainingTracks(id, type, generator, interaction) {
 
   if (total > 0) {
     interaction.channel
-      ?.send(`✅ Playlist completa cargada: **${total + 5}** canciones en total en la cola.`)
+      ?.send(`✅ Playlist completa: **${total + 5}** canciones en la cola.`)
       .catch(() => {});
   }
 }
