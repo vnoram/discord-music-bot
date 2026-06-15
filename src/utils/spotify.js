@@ -33,8 +33,8 @@ async function getTrack(id) {
 
 async function getPlaylistInfo(id) {
   await ensureToken();
-  const { body } = await spotifyApi.getPlaylist(id, { fields: 'name,images,tracks.total' });
-  return { name: body.name, total: body.tracks.total, thumbnail: body.images?.[0]?.url || null };
+  const { body } = await spotifyApi.getPlaylist(id, { fields: 'name,images,tracks(total)' });
+  return { name: body.name, total: body.tracks?.total || 0, thumbnail: body.images?.[0]?.url || null };
 }
 
 async function* getPlaylistTracks(id) {
@@ -103,5 +103,4 @@ module.exports = {
   getAlbumInfo,
   getAlbumTracks,
   trackToSearchQuery,
-  trackToSongMeta,
-};
+  trackToSongMe
