@@ -1,18 +1,7 @@
-/**
- * Wrapper para yt-dlp — reemplaza play-dl para streaming/búsqueda en YouTube.
- * Usa el cliente iOS de YouTube para evadir la detección de bots en servidores cloud.
- */
 const { spawn } = require('child_process');
 const path = require('path');
 
-// Binario local descargado en postinstall, o el del PATH si existe
 const YTDLP_BIN = path.join(__dirname, '../../bin/yt-dlp');
-
-const BASE_ARGS = [
-  '--extractor-arg', 'youtube:player_client=ios,web',
-  '--no-warnings',
-  '-q',
-];
 
 async function searchYoutube(query) {
   return new Promise((resolve, reject) => {
@@ -20,7 +9,8 @@ async function searchYoutube(query) {
       `ytsearch1:${query}`,
       '--dump-json',
       '--no-playlist',
-      ...BASE_ARGS,
+      '--no-warnings',
+      '-q',
     ]);
 
     let out = '', err = '';
@@ -49,7 +39,7 @@ async function searchYoutube(query) {
 async function getVideoInfo(url) {
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP_BIN, [
-      url, '--dump-json', '--no-playlist', ...BASE_ARGS,
+      url, '--dump-json', '--no-playlist', '--no-warnings', '-q',
     ]);
 
     let out = '';
@@ -77,11 +67,11 @@ async function getVideoInfo(url) {
 function createAudioStream(url) {
   const proc = spawn(YTDLP_BIN, [
     url,
-    '-f', 'bestaudio[acodec=opus]/bestaudio[ext=webm]/bestaudio',
-    '--extractor-arg', 'youtube:player_client=ios,web',
+    '-f', 'bestaudio/best',   // formato simple y compatible
     '--no-playlist',
     '-o', '-',
-    '-q', '--no-warnings',
+    '--no-warnings',
+    '-q',
   ]);
 
   proc.stderr.on('data', (d) => {
