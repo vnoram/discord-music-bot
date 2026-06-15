@@ -3,32 +3,32 @@
  * Usa el cliente iOS de YouTube para evadir la detección de bots en servidores cloud.
  */
 const { spawn } = require('child_process');
+const path = require('path');
 
-const YTDLP_ARGS_BASE = [
+// Binario local descargado en postinstall, o el del PATH si existe
+const YTDLP_BIN = path.join(__dirname, '../../bin/yt-dlp');
+
+const BASE_ARGS = [
   '--extractor-arg', 'youtube:player_client=ios,web',
   '--no-warnings',
   '-q',
 ];
 
-/**
- * Busca en YouTube y devuelve la URL del primer resultado.
- */
 async function searchYoutube(query) {
   return new Promise((resolve, reject) => {
-    const proc = spawn('yt-dlp', [
+    const proc = spawn(YTDLP_BIN, [
       `ytsearch1:${query}`,
       '--dump-json',
       '--no-playlist',
-      ...YTDLP_ARGS_BASE,
+      ...BASE_ARGS,
     ]);
 
-    let output = '';
-    let errOutput = '';
-    proc.stdout.on('data', (d) => (output += d.toString()));
-    proc.stderr.on('data', (d) => (errOutput += d.toString()));
-    proc.on('close', (code) => {
-      const trimmed = output.trim();
-      if (!trimmed) return reject(new Error(`yt-dlp search falló: ${errOutput}`));
+    let out = '', err = '';
+    proc.stdout.on('data', (d) => (out += d));
+    proc.stderr.on('data', (d) => (err += d));
+    proc.on('close', () => {
+      const trimmed = out.trim();
+      if (!trimmed) return reject(new Error(`yt-dlp search falló: ${err}`));
       try {
         const info = JSON.parse(trimmed);
         resolve({
@@ -42,26 +42,20 @@ async function searchYoutube(query) {
         reject(new Error(`yt-dlp parse error: ${e.message}`));
       }
     });
-    proc.on('error', (e) => reject(new Error(`yt-dlp no encontrado: ${e.message}`)));
+    proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
   });
 }
 
-/**
- * Obtiene info de una URL de YouTube.
- */
 async function getVideoInfo(url) {
   return new Promise((resolve, reject) => {
-    const proc = spawn('yt-dlp', [
-      url,
-      '--dump-json',
-      '--no-playlist',
-      ...YTDLP_ARGS_BASE,
+    const proc = spawn(YTDLP_BIN, [
+      url, '--dump-json', '--no-playlist', ...BASE_ARGS,
     ]);
 
-    let output = '';
-    proc.stdout.on('data', (d) => (output += d.toString()));
+    let out = '';
+    proc.stdout.on('data', (d) => (out += d));
     proc.on('close', () => {
-      const trimmed = output.trim();
+      const trimmed = out.trim();
       if (!trimmed) return reject(new Error('No se pudo obtener info del video'));
       try {
         const info = JSON.parse(trimmed);
@@ -76,16 +70,12 @@ async function getVideoInfo(url) {
         reject(e);
       }
     });
-    proc.on('error', (e) => reject(new Error(`yt-dlp no encontrado: ${e.message}`)));
+    proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
   });
 }
 
-/**
- * Crea un stream de audio para una URL de YouTube.
- * Devuelve el stdout del proceso yt-dlp (Readable stream).
- */
 function createAudioStream(url) {
-  const proc = spawn('yt-dlp', [
+  const proc = spawn(YTDLP_BIN, [
     url,
     '-f', 'bestaudio[acodec=opus]/bestaudio[ext=webm]/bestaudio',
     '--extractor-arg', 'youtube:player_client=ios,web',
@@ -95,13 +85,10 @@ function createAudioStream(url) {
   ]);
 
   proc.stderr.on('data', (d) => {
-    const msg = d.toString();
-    if (msg.trim()) console.error('[yt-dlp]', msg.trim());
+    const msg = d.toString().trim();
+    if (msg) console.error('[yt-dlp]', msg);
   });
-
-  proc.on('error', (e) => {
-    console.error('[yt-dlp] Error al iniciar proceso:', e.message);
-  });
+  proc.on('error', (e) => console.error('[yt-dlp] spawn error:', e.message));
 
   return proc.stdout;
 }
