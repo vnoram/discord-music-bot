@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const ffmpegPath = require('ffmpeg-static');
 
 const YTDLP_BIN = path.join(__dirname, '../../bin/yt-dlp');
 
@@ -7,10 +8,7 @@ async function searchYoutube(query) {
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP_BIN, [
       `ytsearch1:${query}`,
-      '--dump-json',
-      '--no-playlist',
-      '--no-warnings',
-      '-q',
+      '--dump-json', '--no-playlist', '--no-warnings', '-q',
     ]);
 
     let out = '', err = '';
@@ -64,23 +62,41 @@ async function getVideoInfo(url) {
   });
 }
 
+// Retorna stream PCM raw listo para StreamType.Raw
 function createAudioStream(url) {
-  const proc = spawn(YTDLP_BIN, [
+  const ytdlp = spawn(YTDLP_BIN, [
     url,
-    '-f', 'bestaudio/best',   // formato simple y compatible
+    '-f', 'bestaudio/best',
     '--no-playlist',
     '-o', '-',
     '--no-warnings',
     '-q',
   ]);
 
-  proc.stderr.on('data', (d) => {
+  const ffmpeg = spawn(ffmpegPath, [
+    '-i', 'pipe:0',
+    '-analyzeduration', '0',
+    '-loglevel', 'error',
+    '-f', 's16le',
+    '-ar', '48000',
+    '-ac', '2',
+    'pipe:1',
+  ]);
+
+  ytdlp.stdout.pipe(ffmpeg.stdin);
+
+  ytdlp.stderr.on('data', (d) => {
     const msg = d.toString().trim();
     if (msg) console.error('[yt-dlp]', msg);
   });
-  proc.on('error', (e) => console.error('[yt-dlp] spawn error:', e.message));
+  ffmpeg.stderr.on('data', (d) => {
+    const msg = d.toString().trim();
+    if (msg) console.error('[ffmpeg]', msg);
+  });
+  ytdlp.on('error', (e) => console.error('[yt-dlp spawn]', e.message));
+  ffmpeg.on('error', (e) => console.error('[ffmpeg spawn]', e.message));
 
-  return proc.stdout;
+  return ffmpeg.stdout;
 }
 
 module.exports = { searchYoutube, getVideoInfo, createAudioStream };

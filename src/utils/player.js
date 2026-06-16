@@ -115,7 +115,7 @@ async function playNext(guildId) {
 
     const stream = createAudioStream(url);
     const resource = createAudioResource(stream, {
-      inputType: StreamType.Arbitrary,
+      inputType: StreamType.Raw,
       inlineVolume: true,
     });
     resource.volume?.setVolume(queue.volume);
