@@ -10,7 +10,6 @@ async function searchYoutube(query) {
       `ytsearch1:${query}`,
       '--dump-json', '--no-playlist', '--no-warnings', '-q',
     ]);
-
     let out = '', err = '';
     proc.stdout.on('data', (d) => (out += d));
     proc.stderr.on('data', (d) => (err += d));
@@ -39,7 +38,6 @@ async function getVideoInfo(url) {
     const proc = spawn(YTDLP_BIN, [
       url, '--dump-json', '--no-playlist', '--no-warnings', '-q',
     ]);
-
     let out = '';
     proc.stdout.on('data', (d) => (out += d));
     proc.on('close', () => {
@@ -54,49 +52,54 @@ async function getVideoInfo(url) {
           durationMs: (info.duration || 0) * 1000,
           thumbnail: info.thumbnail || null,
         });
-      } catch (e) {
-        reject(e);
-      }
+      } catch (e) { reject(e); }
     });
     proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
   });
 }
 
-// Retorna stream PCM raw listo para StreamType.Raw
-function createAudioStream(url) {
-  const ytdlp = spawn(YTDLP_BIN, [
-    url,
-    '-f', 'bestaudio/best',
-    '--no-playlist',
-    '-o', '-',
-    '--no-warnings',
-    '-q',
-  ]);
+// Obtiene la URL directa del CDN (sin descargar nada)
+async function getDirectUrl(youtubeUrl) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(YTDLP_BIN, [
+      youtubeUrl,
+      '-f', 'bestaudio/best',
+      '--get-url',
+      '--no-playlist',
+      '-q', '--no-warnings',
+    ]);
+    let out = '', err = '';
+    proc.stdout.on('data', (d) => (out += d));
+    proc.stderr.on('data', (d) => (err += d));
+    proc.on('close', () => {
+      const u = out.trim().split('\n')[0];
+      if (!u) return reject(new Error(`No se obtuvo URL directa: ${err}`));
+      resolve(u);
+    });
+    proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
+  });
+}
 
-  const ffmpeg = spawn(ffmpegPath, [
-    '-i', 'pipe:0',
-    '-analyzeduration', '0',
-    '-loglevel', 'error',
+// ffmpeg lee directamente la URL del CDN → PCM raw para StreamType.Raw
+function createFfmpegStream(directUrl) {
+  const proc = spawn(ffmpegPath, [
+    '-reconnect', '1',
+    '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '5',
+    '-i', directUrl,
+    '-vn',
     '-f', 's16le',
     '-ar', '48000',
     '-ac', '2',
+    '-loglevel', 'error',
     'pipe:1',
   ]);
-
-  ytdlp.stdout.pipe(ffmpeg.stdin);
-
-  ytdlp.stderr.on('data', (d) => {
-    const msg = d.toString().trim();
-    if (msg) console.error('[yt-dlp]', msg);
-  });
-  ffmpeg.stderr.on('data', (d) => {
+  proc.stderr.on('data', (d) => {
     const msg = d.toString().trim();
     if (msg) console.error('[ffmpeg]', msg);
   });
-  ytdlp.on('error', (e) => console.error('[yt-dlp spawn]', e.message));
-  ffmpeg.on('error', (e) => console.error('[ffmpeg spawn]', e.message));
-
-  return ffmpeg.stdout;
+  proc.on('error', (e) => console.error('[ffmpeg spawn]', e.message));
+  return proc.stdout;
 }
 
-module.exports = { searchYoutube, getVideoInfo, createAudioStream };
+module.exports = { searchYoutube, getVideoInfo, getDirectUrl, createFfmpegStream };

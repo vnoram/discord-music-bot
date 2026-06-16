@@ -8,9 +8,8 @@ const {
   NoSubscriberBehavior,
   StreamType,
 } = require('@discordjs/voice');
-const { searchYoutube, createAudioStream } = require('./ytdlp');
+const { searchYoutube, getDirectUrl, createFfmpegStream } = require('./ytdlp');
 
-// Mapa: guildId -> GuildQueue
 const queues = new Map();
 
 function getQueue(guildId) {
@@ -23,16 +22,10 @@ function createQueue(guild, voiceChannel, textChannel) {
   });
 
   const queue = {
-    guild,
-    voiceChannel,
-    textChannel,
-    connection: null,
-    audioPlayer,
-    songs: [],
-    currentSong: null,
-    isPlaying: false,
-    volume: 0.5,
-    loading: false,
+    guild, voiceChannel, textChannel,
+    connection: null, audioPlayer,
+    songs: [], currentSong: null,
+    isPlaying: false, volume: 0.5, loading: false,
   };
 
   queues.set(guild.id, queue);
@@ -41,10 +34,7 @@ function createQueue(guild, voiceChannel, textChannel) {
 }
 
 function _setupPlayerEvents(guildId, audioPlayer) {
-  audioPlayer.on(AudioPlayerStatus.Idle, () => {
-    playNext(guildId);
-  });
-
+  audioPlayer.on(AudioPlayerStatus.Idle, () => playNext(guildId));
   audioPlayer.on('error', (err) => {
     console.error(`[Player] Error en guild ${guildId}:`, err.message);
     playNext(guildId);
@@ -97,7 +87,6 @@ async function playNext(guildId) {
   if (queue.songs.length === 0) {
     queue.currentSong = null;
     queue.isPlaying = false;
-
     setTimeout(() => {
       const q = queues.get(guildId);
       if (q && !q.isPlaying && q.songs.length === 0) destroy(guildId);
@@ -110,10 +99,14 @@ async function playNext(guildId) {
   queue.isPlaying = true;
 
   try {
-    const url = await resolveYoutubeUrl(song);
-    song.url = url;
+    const youtubeUrl = await resolveYoutubeUrl(song);
+    song.url = youtubeUrl;
 
-    const stream = createAudioStream(url);
+    console.log(`[Player] Obteniendo URL directa para: ${song.title}`);
+    const directUrl = await getDirectUrl(youtubeUrl);
+    console.log(`[Player] Iniciando ffmpeg stream`);
+
+    const stream = createFfmpegStream(directUrl);
     const resource = createAudioResource(stream, {
       inputType: StreamType.Raw,
       inlineVolume: true,
