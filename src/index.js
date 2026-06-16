@@ -13,8 +13,18 @@ const required = ['DISCORD_TOKEN', 'CLIENT_ID', 'SPOTIFY_CLIENT_ID', 'SPOTIFY_CL
 const missing = required.filter((k) => !process.env[k]);
 if (missing.length) {
   console.error(`❌ Faltan variables de entorno: ${missing.join(', ')}`);
-  console.error('   Copia .env.example a .env y llénalo.');
   process.exit(1);
+}
+
+// ── Cookies de YouTube (opcional pero recomendado para IPs de datacenter) ──
+if (process.env.YOUTUBE_COOKIES) {
+  try {
+    const content = Buffer.from(process.env.YOUTUBE_COOKIES, 'base64').toString('utf8');
+    fs.writeFileSync('/tmp/yt-cookies.txt', content);
+    console.log('🍪 YouTube cookies cargadas');
+  } catch (e) {
+    console.warn('⚠️  No se pudieron cargar las cookies de YouTube:', e.message);
+  }
 }
 
 const client = new Client({
@@ -41,7 +51,7 @@ for (const file of fs.readdirSync(commandsPath).filter((f) => f.endsWith('.js'))
 client.once('ready', () => {
   console.log(`\n✅ Bot conectado como: ${client.user.tag}`);
   console.log(`   Servidores: ${client.guilds.cache.size}`);
-  client.user.setActivity('Spotify 🎵', { type: 2 }); // 2 = LISTENING
+  client.user.setActivity('Spotify 🎵', { type: 2 });
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -63,7 +73,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// ── Manejo de errores no capturados ───────────────────────────────────────
 process.on('unhandledRejection', (err) => console.error('[UnhandledRejection]', err));
 process.on('uncaughtException', (err) => console.error('[UncaughtException]', err));
 

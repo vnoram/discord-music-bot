@@ -1,7 +1,22 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const YTDLP_BIN = path.join(__dirname, '../../bin/yt-dlp');
+const COOKIES_PATH = '/tmp/yt-cookies.txt';
+
+// Args base para evitar detección bot en IPs de datacenter
+function baseArgs() {
+  const args = [
+    '--extractor-args', 'youtube:player_client=tv_embedded,web',
+    '--no-warnings',
+    '-q',
+  ];
+  if (fs.existsSync(COOKIES_PATH)) {
+    args.push('--cookies', COOKIES_PATH);
+  }
+  return args;
+}
 
 async function searchYoutube(query) {
   return new Promise((resolve, reject) => {
@@ -9,8 +24,7 @@ async function searchYoutube(query) {
       `ytsearch1:${query}`,
       '--dump-json',
       '--no-playlist',
-      '--no-warnings',
-      '-q',
+      ...baseArgs(),
     ]);
 
     let out = '', err = '';
@@ -18,7 +32,7 @@ async function searchYoutube(query) {
     proc.stderr.on('data', (d) => (err += d));
     proc.on('close', () => {
       const trimmed = out.trim();
-      if (!trimmed) return reject(new Error(`yt-dlp search falló: ${err}`));
+      if (!trimmed) return reject(new Error(`yt-dlp search falló: ${err.trim()}`));
       try {
         const info = JSON.parse(trimmed);
         resolve({
@@ -39,7 +53,10 @@ async function searchYoutube(query) {
 async function getVideoInfo(url) {
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP_BIN, [
-      url, '--dump-json', '--no-playlist', '--no-warnings', '-q',
+      url,
+      '--dump-json',
+      '--no-playlist',
+      ...baseArgs(),
     ]);
 
     let out = '';
@@ -56,9 +73,7 @@ async function getVideoInfo(url) {
           durationMs: (info.duration || 0) * 1000,
           thumbnail: info.thumbnail || null,
         });
-      } catch (e) {
-        reject(e);
-      }
+      } catch (e) { reject(e); }
     });
     proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
   });
@@ -67,11 +82,10 @@ async function getVideoInfo(url) {
 function createAudioStream(url) {
   const proc = spawn(YTDLP_BIN, [
     url,
-    '-f', 'bestaudio/best',   // formato simple y compatible
+    '-f', 'bestaudio/best',
     '--no-playlist',
     '-o', '-',
-    '--no-warnings',
-    '-q',
+    ...baseArgs(),
   ]);
 
   proc.stderr.on('data', (d) => {
