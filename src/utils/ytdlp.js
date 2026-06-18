@@ -5,13 +5,8 @@ const fs = require('fs');
 const YTDLP_BIN = path.join(__dirname, '../../bin/yt-dlp');
 const COOKIES_PATH = '/tmp/yt-cookies.txt';
 
-// Args base para evitar detección bot en IPs de datacenter
 function baseArgs() {
-  const args = [
-    '--extractor-args', 'youtube:player_client=tv_embedded,web',
-    '--no-warnings',
-    '-q',
-  ];
+  const args = ['--no-warnings', '-q'];
   if (fs.existsSync(COOKIES_PATH)) {
     args.push('--cookies', COOKIES_PATH);
   }
@@ -22,11 +17,9 @@ async function searchYoutube(query) {
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP_BIN, [
       `ytsearch1:${query}`,
-      '--dump-json',
-      '--no-playlist',
+      '--dump-json', '--no-playlist',
       ...baseArgs(),
     ]);
-
     let out = '', err = '';
     proc.stdout.on('data', (d) => (out += d));
     proc.stderr.on('data', (d) => (err += d));
@@ -42,9 +35,7 @@ async function searchYoutube(query) {
           durationMs: (info.duration || 0) * 1000,
           thumbnail: info.thumbnail || null,
         });
-      } catch (e) {
-        reject(new Error(`yt-dlp parse error: ${e.message}`));
-      }
+      } catch (e) { reject(new Error(`yt-dlp parse error: ${e.message}`)); }
     });
     proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
   });
@@ -52,13 +43,7 @@ async function searchYoutube(query) {
 
 async function getVideoInfo(url) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(YTDLP_BIN, [
-      url,
-      '--dump-json',
-      '--no-playlist',
-      ...baseArgs(),
-    ]);
-
+    const proc = spawn(YTDLP_BIN, [url, '--dump-json', '--no-playlist', ...baseArgs()]);
     let out = '';
     proc.stdout.on('data', (d) => (out += d));
     proc.on('close', () => {
@@ -66,13 +51,9 @@ async function getVideoInfo(url) {
       if (!trimmed) return reject(new Error('No se pudo obtener info del video'));
       try {
         const info = JSON.parse(trimmed);
-        resolve({
-          url: info.webpage_url || url,
-          title: info.title || 'Sin título',
-          artist: info.uploader || 'YouTube',
-          durationMs: (info.duration || 0) * 1000,
-          thumbnail: info.thumbnail || null,
-        });
+        resolve({ url: info.webpage_url || url, title: info.title || 'Sin título',
+          artist: info.uploader || 'YouTube', durationMs: (info.duration || 0) * 1000,
+          thumbnail: info.thumbnail || null });
       } catch (e) { reject(e); }
     });
     proc.on('error', (e) => reject(new Error(`yt-dlp error: ${e.message}`)));
@@ -80,20 +61,9 @@ async function getVideoInfo(url) {
 }
 
 function createAudioStream(url) {
-  const proc = spawn(YTDLP_BIN, [
-    url,
-    '-f', 'bestaudio/best',
-    '--no-playlist',
-    '-o', '-',
-    ...baseArgs(),
-  ]);
-
-  proc.stderr.on('data', (d) => {
-    const msg = d.toString().trim();
-    if (msg) console.error('[yt-dlp]', msg);
-  });
+  const proc = spawn(YTDLP_BIN, [url, '-f', 'bestaudio/best', '--no-playlist', '-o', '-', ...baseArgs()]);
+  proc.stderr.on('data', (d) => { const msg = d.toString().trim(); if (msg) console.error('[yt-dlp]', msg); });
   proc.on('error', (e) => console.error('[yt-dlp] spawn error:', e.message));
-
   return proc.stdout;
 }
 
