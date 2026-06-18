@@ -14,6 +14,7 @@ async function ensureToken() {
   tokenExpiry = Date.now() + data.body.expires_in * 1000;
 }
 
+// Extrae tipo e ID de una URL de Spotify
 function parseSpotifyUrl(url) {
   const match = url.match(/spotify\.com\/(track|playlist|album)\/([A-Za-z0-9]+)/);
   return match ? { type: match[1], id: match[2] } : null;
@@ -32,7 +33,8 @@ async function getTrack(id) {
 
 async function getPlaylistInfo(id) {
   await ensureToken();
-  const { body } = await spotifyApi.getPlaylist(id, { fields: 'name,images,tracks(total)' });
+  // Sin filtro de fields para garantizar que tracks.total esté disponible
+  const { body } = await spotifyApi.getPlaylist(id, { fields: 'name,images,tracks' });
   return { name: body.name, total: body.tracks?.total || 0, thumbnail: body.images?.[0]?.url || null };
 }
 
@@ -42,10 +44,7 @@ async function* getPlaylistTracks(id) {
   const limit = 50;
 
   while (true) {
-    const { body } = await spotifyApi.getPlaylistTracks(id, {
-      offset, limit,
-      fields: 'next,items(track(name,artists,duration_ms,album(images)))',
-    });
+    const { body } = await spotifyApi.getPlaylistTracks(id, { offset, limit, fields: 'next,items(track(name,artists,duration_ms,album(images)))' });
     for (const item of body.items) {
       if (item?.track) yield item.track;
     }
@@ -62,6 +61,7 @@ async function getAlbumInfo(id) {
 
 async function* getAlbumTracks(id) {
   await ensureToken();
+  // Get album info first for artist names
   const { body: album } = await spotifyApi.getAlbum(id);
   let offset = 0;
   const limit = 50;
@@ -92,7 +92,7 @@ function trackToSongMeta(track) {
     artist: (track.artists || []).map((a) => a.name).join(', '),
     thumbnail: track.album?.images?.[0]?.url || null,
     durationMs: track.duration_ms,
-    url: null,
+    url: null, // will be resolved via YouTube search
   };
 }
 
