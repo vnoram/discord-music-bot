@@ -6,7 +6,7 @@ const YTDLP_BIN = path.join(__dirname, '../../bin/yt-dlp');
 const COOKIES_PATH = '/tmp/yt-cookies.txt';
 
 function baseArgs() {
-  const args = ['--no-warnings', '-q'];
+  const args = ['--no-warnings'];
   if (fs.existsSync(COOKIES_PATH)) {
     args.push('--cookies', COOKIES_PATH);
   }
