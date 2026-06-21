@@ -79,26 +79,34 @@ module.exports = {
 
 async function _loadSpotifyTracksPartial(id, type, interaction) {
   const voiceChannel = interaction.member?.voice?.channel;
-  const generator = type === 'playlist'
-    ? spotify.getPlaylistTracks(id)
-    : spotify.getAlbumTracks(id);
 
-  const firstBatch = [];
-  let count = 0;
+  try {
+    const generator = type === 'playlist'
+      ? spotify.getPlaylistTracks(id)
+      : spotify.getAlbumTracks(id);
 
-  for await (const track of generator) {
-    firstBatch.push(spotify.trackToSongMeta(track));
-    count++;
-    if (count >= 5) break;
+    const firstBatch = [];
+    let count = 0;
+
+    for await (const track of generator) {
+      firstBatch.push(spotify.trackToSongMeta(track));
+      count++;
+      if (count >= 5) break;
+    }
+
+    if (!firstBatch.length) {
+      await interaction.editReply('❌ No se encontraron canciones en esa playlist/álbum.');
+      return;
+    }
+
+    await _enqueueAndPlay(interaction, voiceChannel, firstBatch);
+    _loadRemainingTracks(id, type, generator, interaction).catch((err) => {
+      console.error('[play] Error cargando tracks restantes:', err);
+    });
+  } catch (err) {
+    console.error('[play] Error en _loadSpotifyTracksPartial:', err);
+    await interaction.editReply(`❌ Error cargando playlist: ${err.message}`).catch(() => {});
   }
-
-  if (!firstBatch.length) {
-    await interaction.editReply('❌ No se encontraron canciones en esa playlist/álbum.');
-    return;
-  }
-
-  await _enqueueAndPlay(interaction, voiceChannel, firstBatch);
-  _loadRemainingTracks(id, type, generator, interaction).catch(console.error);
 }
 
 async function _loadRemainingTracks(id, type, generator, interaction) {

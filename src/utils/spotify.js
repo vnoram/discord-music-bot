@@ -44,7 +44,7 @@ async function getTrack(id) {
 async function getPlaylistInfo(id) {
   await ensureToken();
   // Sin filtro fields para garantizar que tracks.total esté disponible
-  const { body } = await spotifyApi.getPlaylist(id, { fields: 'name,images,tracks' });
+  const { body } = await spotifyApi.getPlaylist(id);
   return {
     name: body.name,
     total: body.tracks?.total || 0,
