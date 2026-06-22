@@ -58,6 +58,9 @@ async function* getPlaylistTracks(id) {
   // getPlaylistTracks da 403 con Client Credentials en modo dev.
   // Usamos getPlaylist que sí funciona y devuelve la primera página de tracks.
   const { body: playlist } = await spotifyApi.getPlaylist(id);
+  console.log('[Spotify DEBUG] tracks.total:', playlist.tracks?.total,
+    '| items.length:', playlist.tracks?.items?.length,
+    '| first item track:', playlist.tracks?.items?.[0]?.track?.name ?? 'NULL');
   let page = playlist.tracks;
 
   while (page) {
