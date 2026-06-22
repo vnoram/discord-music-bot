@@ -54,17 +54,29 @@ async function getPlaylistInfo(id) {
 
 async function* getPlaylistTracks(id) {
   await ensureToken();
-  let offset = 0;
-  const limit = 50;
 
-  while (true) {
-    // Sin fields filter: evita 403 con Client Credentials
-    const { body } = await spotifyApi.getPlaylistTracks(id, { offset, limit });
-    for (const item of body.items) {
+  // getPlaylistTracks da 403 con Client Credentials en modo dev.
+  // Usamos getPlaylist que sí funciona y devuelve la primera página de tracks.
+  const { body: playlist } = await spotifyApi.getPlaylist(id);
+  let page = playlist.tracks;
+
+  while (page) {
+    for (const item of (page.items || [])) {
       if (item?.track) yield item.track;
     }
-    if (!body.next) break;
-    offset += limit;
+    if (!page.next) break;
+
+    // Paginar usando la URL 'next' directamente con el token vigente
+    try {
+      const token = spotifyApi.getAccessToken();
+      const res = await fetch(page.next, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) break;
+      page = await res.json();
+    } catch {
+      break;
+    }
   }
 }
 
