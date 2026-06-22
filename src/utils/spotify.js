@@ -24,9 +24,9 @@ async function ensureToken(retries = 2) {
   }
 }
 
-// Soporta open.spotify.com y spotify.com, con o sin parámetros de URL
+// Soporta open.spotify.com, spotify.com, URLs con /intl-XX/ y parámetros ?si=...
 function parseSpotifyUrl(url) {
-  const match = url.match(/spotify\.com\/(track|playlist|album)\/([A-Za-z0-9]+)/);
+  const match = url.match(/spotify\.com\/(?:intl-\w+\/)?(track|playlist|album)\/([A-Za-z0-9]+)/);
   return match ? { type: match[1], id: match[2] } : null;
 }
 
@@ -58,12 +58,8 @@ async function* getPlaylistTracks(id) {
   const limit = 50;
 
   while (true) {
-    const { body } = await spotifyApi.getPlaylistTracks(id, {
-      offset,
-      limit,
-      // Usar parentesis para campos anidados, NO notacion de punto
-      fields: 'next,items(track(name,artists,duration_ms,album(images)))',
-    });
+    // Sin fields filter: evita 403 con Client Credentials
+    const { body } = await spotifyApi.getPlaylistTracks(id, { offset, limit });
     for (const item of body.items) {
       if (item?.track) yield item.track;
     }
