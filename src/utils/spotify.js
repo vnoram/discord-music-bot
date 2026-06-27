@@ -96,7 +96,7 @@ async function* getPlaylistTracks(id) {
     }
     const data = await res.json();
     const tracks = data.tracks;
-    console.log(`[Spotify DEBUG] offset=${offset} tracks=${JSON.stringify(tracks).slice(0, 400)}`);
+    console.log(`[Spotify DEBUG] offset=${offset} response keys=${JSON.stringify(Object.keys(data))} tracks=${JSON.stringify(tracks)}`);
     if (!tracks?.items?.length) break;
     if (total === null) total = tracks.total;
     for (const item of tracks.items) {
