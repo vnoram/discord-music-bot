@@ -85,7 +85,6 @@ async function* getPlaylistTracks(id) {
   // en vez de GET /playlists/{id}/tracks (403 en modo desarrollo desde nov 2024)
   let offset = 0;
   const limit = 50;
-  let total = null;
 
   while (true) {
     const url = `https://api.spotify.com/v1/playlists/${id}?limit=${limit}&offset=${offset}`;
@@ -95,15 +94,15 @@ async function* getPlaylistTracks(id) {
       throw new Error(`Spotify playlist (offset=${offset}): ${res.status} | ${body.slice(0, 200)}`);
     }
     const data = await res.json();
-    const tracks = data.tracks;
-    console.log(`[Spotify DEBUG] offset=${offset} response keys=${JSON.stringify(Object.keys(data))} tracks=${JSON.stringify(tracks)}`);
-    if (!tracks?.items?.length) break;
-    if (total === null) total = tracks.total;
-    for (const item of tracks.items) {
+    // Con limit/offset, Spotify devuelve items en top-level (no en data.tracks.items)
+    const items = data.items ?? data.tracks?.items;
+    console.log(`[Spotify DEBUG] offset=${offset} items=${items?.length}`);
+    if (!items?.length) break;
+    for (const item of items) {
       if (item?.track) yield item.track;
     }
+    if (items.length < limit) break; // última página
     offset += limit;
-    if (!tracks.next || offset >= total) break;
   }
 }
 
