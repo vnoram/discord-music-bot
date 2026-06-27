@@ -79,51 +79,55 @@ module.exports = {
 
 async function _loadSpotifyTracksPartial(id, type, interaction) {
   const voiceChannel = interaction.member?.voice?.channel;
+  const guildId = interaction.guildId;
 
   try {
     const generator = type === 'playlist'
       ? spotify.getPlaylistTracks(id)
       : spotify.getAlbumTracks(id);
 
-    const firstBatch = [];
-    let count = 0;
+    let enqueued = false;
+    let firstBatch = [];
+    let totalLoaded = 0;
 
     for await (const track of generator) {
-      firstBatch.push(spotify.trackToSongMeta(track));
-      count++;
-      if (count >= 5) break;
+      const song = spotify.trackToSongMeta(track);
+      totalLoaded++;
+
+      if (!enqueued) {
+        firstBatch.push(song);
+        // Arrancar con las primeras 5 canciones sin cerrar el generador
+        if (firstBatch.length >= 5) {
+          await _enqueueAndPlay(interaction, voiceChannel, firstBatch);
+          firstBatch = [];
+          enqueued = true;
+        }
+      } else {
+        // Agregar el resto directamente a la cola existente
+        const queue = player.getQueue(guildId);
+        if (!queue) break;
+        queue.songs.push(song);
+      }
     }
 
-    if (!firstBatch.length) {
-      await interaction.editReply('❌ No se encontraron canciones en esa playlist/álbum.');
-      return;
+    // Playlist con menos de 5 canciones
+    if (!enqueued) {
+      if (!firstBatch.length) {
+        await interaction.editReply('❌ No se encontraron canciones en esa playlist/álbum.');
+        return;
+      }
+      await _enqueueAndPlay(interaction, voiceChannel, firstBatch);
+      enqueued = true;
     }
 
-    await _enqueueAndPlay(interaction, voiceChannel, firstBatch);
-    _loadRemainingTracks(id, type, generator, interaction).catch((err) => {
-      console.error('[play] Error cargando tracks restantes:', err);
-    });
+    if (totalLoaded > 5) {
+      interaction.channel
+        ?.send(`✅ Playlist lista: **${totalLoaded}** canciones en cola.`)
+        .catch(() => {});
+    }
   } catch (err) {
     console.error('[play] Error en _loadSpotifyTracksPartial:', err);
     await interaction.editReply(`❌ Error cargando playlist: ${err.message}`).catch(() => {});
-  }
-}
-
-async function _loadRemainingTracks(id, type, generator, interaction) {
-  const guildId = interaction.guildId;
-  let total = 0;
-
-  for await (const track of generator) {
-    const queue = player.getQueue(guildId);
-    if (!queue) break;
-    queue.songs.push(spotify.trackToSongMeta(track));
-    total++;
-  }
-
-  if (total > 0) {
-    interaction.channel
-      ?.send(`✅ Playlist completa: **${total + 5}** canciones en la cola.`)
-      .catch(() => {});
   }
 }
 
