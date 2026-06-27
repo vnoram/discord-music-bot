@@ -81,21 +81,28 @@ async function* getPlaylistTracks(id) {
   await ensureToken();
   const token = spotifyApi.getAccessToken();
 
-  // Llamar directamente al endpoint (bypass del SDK que no incluye tracks)
-  let url = `https://api.spotify.com/v1/playlists/${id}/tracks?limit=50&offset=0`;
+  // Usar GET /playlists/{id}?limit=50&offset=N (endpoint core, no restringido)
+  // en vez de GET /playlists/{id}/tracks (403 en modo desarrollo desde nov 2024)
+  let offset = 0;
+  const limit = 50;
+  let total = null;
 
-  while (url) {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const bodyText = await res.text();
-    console.log('[Spotify DEBUG] /tracks status:', res.status, '| body:', bodyText.slice(0, 300));
-    if (!res.ok) throw new Error(`Spotify tracks: ${res.status} ${res.statusText}`);
-    const page = JSON.parse(bodyText);
-    for (const item of (page.items || [])) {
+  while (true) {
+    const url = `https://api.spotify.com/v1/playlists/${id}?limit=${limit}&offset=${offset}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Spotify playlist (offset=${offset}): ${res.status} | ${body.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    const tracks = data.tracks;
+    if (!tracks?.items?.length) break;
+    if (total === null) total = tracks.total;
+    for (const item of tracks.items) {
       if (item?.track) yield item.track;
     }
-    url = page.next || null;
+    offset += limit;
+    if (!tracks.next || offset >= total) break;
   }
 }
 
