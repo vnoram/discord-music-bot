@@ -88,9 +88,10 @@ async function* getPlaylistTracks(id) {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    console.log('[Spotify DEBUG] /tracks status:', res.status);
+    const bodyText = await res.text();
+    console.log('[Spotify DEBUG] /tracks status:', res.status, '| body:', bodyText.slice(0, 300));
     if (!res.ok) throw new Error(`Spotify tracks: ${res.status} ${res.statusText}`);
-    const page = await res.json();
+    const page = JSON.parse(bodyText);
     for (const item of (page.items || [])) {
       if (item?.track) yield item.track;
     }
