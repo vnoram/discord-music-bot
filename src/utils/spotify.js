@@ -54,32 +54,22 @@ async function getPlaylistInfo(id) {
 
 async function* getPlaylistTracks(id) {
   await ensureToken();
+  const token = spotifyApi.getAccessToken();
 
-  // getPlaylistTracks da 403 con Client Credentials en modo dev.
-  // Usamos getPlaylist que sí funciona y devuelve la primera página de tracks.
-  const { body: playlist } = await spotifyApi.getPlaylist(id);
-  console.log('[Spotify DEBUG] tracks.total:', playlist.tracks?.total,
-    '| items.length:', playlist.tracks?.items?.length,
-    '| first item track:', playlist.tracks?.items?.[0]?.track?.name ?? 'NULL');
-  let page = playlist.tracks;
+  // Llamar directamente al endpoint (bypass del SDK que no incluye tracks)
+  let url = `https://api.spotify.com/v1/playlists/${id}/tracks?limit=50&offset=0`;
 
-  while (page) {
+  while (url) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log('[Spotify DEBUG] /tracks status:', res.status);
+    if (!res.ok) throw new Error(`Spotify tracks: ${res.status} ${res.statusText}`);
+    const page = await res.json();
     for (const item of (page.items || [])) {
       if (item?.track) yield item.track;
     }
-    if (!page.next) break;
-
-    // Paginar usando la URL 'next' directamente con el token vigente
-    try {
-      const token = spotifyApi.getAccessToken();
-      const res = await fetch(page.next, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) break;
-      page = await res.json();
-    } catch {
-      break;
-    }
+    url = page.next || null;
   }
 }
 
