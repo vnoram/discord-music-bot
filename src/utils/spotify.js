@@ -10,11 +10,36 @@ let tokenExpiry = 0;
 async function ensureToken(retries = 2) {
   if (Date.now() < tokenExpiry - 60_000) return;
   try {
-    const data = await spotifyApi.clientCredentialsGrant();
-    spotifyApi.setAccessToken(data.body.access_token);
-    tokenExpiry = Date.now() + data.body.expires_in * 1000;
+    if (process.env.SPOTIFY_REFRESH_TOKEN) {
+      // OAuth user token — permite acceder a playlists y el endpoint /tracks
+      const auth = Buffer.from(
+        `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+      ).toString('base64');
+      const res = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: process.env.SPOTIFY_REFRESH_TOKEN,
+        }),
+      });
+      const data = await res.json();
+      if (!data.access_token) throw new Error(JSON.stringify(data));
+      spotifyApi.setAccessToken(data.access_token);
+      tokenExpiry = Date.now() + (data.expires_in || 3600) * 1000;
+      console.log('[Spotify] Token OAuth renovado correctamente.');
+    } else {
+      // Fallback: Client Credentials (no accede a /tracks de playlists)
+      const data = await spotifyApi.clientCredentialsGrant();
+      spotifyApi.setAccessToken(data.body.access_token);
+      tokenExpiry = Date.now() + data.body.expires_in * 1000;
+      console.warn('[Spotify] Usando Client Credentials — playlists pueden fallar.');
+    }
   } catch (err) {
-    tokenExpiry = 0; // forzar reintento la próxima vez
+    tokenExpiry = 0;
     if (retries > 0) {
       console.warn(`[Spotify] Error de token, reintentando (${retries} restantes)...`);
       await new Promise((r) => setTimeout(r, 1000));
