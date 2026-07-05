@@ -137,6 +137,24 @@ async function* getAlbumTracks(id) {
   }
 }
 
+async function searchTracks(query) {
+  await ensureToken();
+  const { body } = await spotifyApi.searchTracks(query, { limit: 1 });
+  
+  if (!body.tracks?.items?.length) {
+    throw new Error(`No se encontró "${query}" en Spotify`);
+  }
+
+  const track = body.tracks.items[0];
+  return {
+    title: track.name,
+    artist: track.artists.map((a) => a.name).join(', '),
+    thumbnail: track.album?.images?.[0]?.url || null,
+    durationMs: track.duration_ms,
+    url: null,
+  };
+}
+
 function trackToSearchQuery(track) {
   const artist = track.artists?.[0]?.name || '';
   return `${track.name} ${artist} audio`.trim();
@@ -159,6 +177,8 @@ module.exports = {
   getPlaylistTracks,
   getAlbumInfo,
   getAlbumTracks,
+  searchTracks,
   trackToSearchQuery,
   trackToSongMeta,
 };
+

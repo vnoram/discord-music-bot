@@ -35,7 +35,7 @@ module.exports = {
       const spInfo = spotify.parseSpotifyUrl(query);
 
       if (spInfo) {
-        // ── SPOTIFY ──────────────────────────────────────────────────────────
+        // ── SPOTIFY ────────────────────────────────────────────────────────────
         if (spInfo.type === 'track') {
           const meta = await spotify.getTrack(spInfo.id);
           songs = [{ ...meta, url: null }];
@@ -59,8 +59,8 @@ module.exports = {
         await interaction.editReply(`🎵 **Añadido:** ${info.title} — *${info.artist}*`);
 
       } else {
-        // ── BÚSQUEDA DE TEXTO ─────────────────────────────────────────────────
-        const result = await ytdlp.searchYoutube(query);
+        // ── BÚSQUEDA DE TEXTO: SPOTIFY POR DEFECTO ─────────────────────────────
+        const result = await spotify.searchTracks(query);
         songs = [result];
         await interaction.editReply(`🎵 **Añadido:** ${result.title} — *${result.artist}*`);
       }
@@ -157,3 +157,4 @@ async function _enqueueAndPlay(interaction, voiceChannel, songs) {
 function _isYouTubeUrl(str) {
   return str.includes('youtube.com') || str.includes('youtu.be');
 }
+
