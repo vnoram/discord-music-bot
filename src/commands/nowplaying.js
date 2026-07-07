@@ -1,10 +1,10 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const player = require('../utils/player');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('nowplaying')
-    .setDescription('Muestra la canción que se está reproduciendo ahora'),
+    .setDescription('Muestra el panel de control de la canción actual'),
 
   async execute(interaction) {
     const queue = player.getQueue(interaction.guildId);
@@ -13,20 +13,16 @@ module.exports = {
       return interaction.reply({ content: '❌ No hay ninguna canción reproduciéndose.', ephemeral: true });
     }
 
-    const song = queue.currentSong;
-    const dur = song.durationMs ? player._formatDuration(song.durationMs) : '?';
+    const embed = player.buildNowPlayingEmbed(queue.currentSong, queue);
+    const components = player.buildNowPlayingComponents(queue.isPaused, queue.loop);
 
-    const embed = new EmbedBuilder()
-      .setColor(0x1db954)
-      .setTitle('🎵 Reproduciendo ahora')
-      .setDescription(`**${song.title}**\n*${song.artist}*`)
-      .addFields(
-        { name: 'Duración', value: dur, inline: true },
-        { name: 'Canciones en cola', value: String(queue.songs.length), inline: true }
-      );
+    // Borrar el panel anterior si existe
+    if (queue.nowPlayingMessage) {
+      queue.nowPlayingMessage.delete().catch(() => {});
+    }
 
-    if (song.thumbnail) embed.setThumbnail(song.thumbnail);
-
-    await interaction.reply({ embeds: [embed] });
+    // Enviar nuevo panel y guardarlo como el panel activo
+    const msg = await interaction.reply({ embeds: [embed], components, fetchReply: true });
+    queue.nowPlayingMessage = msg;
   },
 };
