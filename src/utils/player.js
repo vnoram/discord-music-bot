@@ -13,7 +13,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
-const play = require('play-dl');
+const ytdlp = require('./ytdlp');
 
 // Mapa: guildId -> GuildQueue
 const queues = new Map();
@@ -94,9 +94,9 @@ async function connect(queue) {
 async function resolveYoutube(song) {
   if (song.url) return song.url;
   const query = `${song.title} ${song.artist} audio`;
-  const results = await play.search(query, { limit: 1, source: { youtube: 'video' } });
-  if (!results.length) throw new Error(`No se encontró en YouTube: ${song.title}`);
-  return results[0].url;
+  const result = await ytdlp.searchYoutube(query);
+  if (!result) throw new Error(`No se encontró en YouTube: ${song.title}`);
+  return result.url;
 }
 
 async function playNext(guildId) {
@@ -140,9 +140,9 @@ async function playNext(guildId) {
     const url = await resolveYoutube(song);
     song.url = url;
 
-    const stream = await play.stream(url, { quality: 2 });
-    const resource = createAudioResource(stream.stream, {
-      inputType: stream.type,
+    const audioStream = ytdlp.createAudioStream(url);
+    const resource = createAudioResource(audioStream, {
+      inputType: 'arbitrary',
       inlineVolume: true,
     });
     resource.volume?.setVolume(queue.volume);
